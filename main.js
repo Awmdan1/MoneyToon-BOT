@@ -184,37 +184,54 @@ class PrompTaleAutomation {
   }
 
   async dailyCheckin() {
-    try {
-      const checkStatus = await retryRequest(() =>
-        axios.get(`${this.baseUrl}${CONFIG.ENDPOINTS.ATTENDANCE_CHECK}`, {
-          headers: this.headers,
-        })
+  try {
+    logger.info("Checking daily attendance status...");
+    const checkStatus = await retryRequest(() =>
+      axios.get(`${this.baseUrl}${CONFIG.ENDPOINTS.ATTENDANCE_CHECK}`, {
+        headers: this.headers,
+      })
+    );
+
+    if (checkStatus?.data?.data === true) {
+      logger.info(
+        `${colors.warning}Already checked in today. No action required.${colors.reset}`
       );
+      return;
+    }
 
-      if (checkStatus.data.data === true) {
-        logger.info(`${colors.warning}Already checked in today${colors.reset}`);
-        return;
-      }
+    logger.info("Submitting daily attendance...");
+    const response = await retryRequest(() =>
+      axios.post(
+        `${this.baseUrl}${CONFIG.ENDPOINTS.ATTENDANCE_SUBMIT}`,
+        {},
+        { headers: this.headers }
+      )
+    );
 
-      const response = await retryRequest(() =>
-        axios.post(
-          `${this.baseUrl}${CONFIG.ENDPOINTS.ATTENDANCE_SUBMIT}`,
-          {},
-          { headers: this.headers }
-        )
-      );
-
+    if (response?.data?.data?.point !== undefined) {
       logger.success(
-        `Daily check-in completed: ${colors.success}${response.data.data.point}${colors.reset} points earned`
+        `Daily check-in completed successfully! Earned ${colors.success}${response.data.data.point}${colors.reset} points.`
       );
-      return response.data;
-    } catch (error) {
-      logger.error(
-        "Error during daily check-in:",
-        error.response?.status || error.message
+    } else {
+      logger.warn(
+        "Daily check-in completed but no points information found in response."
       );
     }
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      logger.error(
+        `Daily check-in failed. Server responded with status ${colors.error}${error.response.status}${colors.reset}`
+      );
+    } else {
+      logger.error(
+        `Daily check-in encountered an error: ${colors.error}${error.message}${colors.reset}`
+      );
+    }
+    // Tambahkan fallback log
+    logger.info("Skipping daily check-in for this cycle.");
   }
+}
 
   async completeTasks() {
     try {
